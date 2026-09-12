@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
                     if (binding.capsuleStatus.text == "Listening" || binding.capsuleStatus.text.startsWith("Hearing")) {
                         val percent = (amp * 100 / 6000).coerceIn(1, 100)
                         binding.capsuleStatus.text = "Hearing you ($percent%)"
-                        binding.capsuleSub.text = "Streaming to Gemini"
+                        binding.capsuleSub.text = "Speaking to Gemini"
                         resetInactivityTimer()
                     }
                 }

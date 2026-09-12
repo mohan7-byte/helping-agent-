@@ -92,12 +92,19 @@ class GeminiLiveClient(
                             })
                         })
                         put("tools", GeminiToolsSchema.getDeviceToolsJson())
+                        // Configure explicit server-side VAD (Voice Activity Detection)
+                        put("realtimeInputConfig", JSONObject().apply {
+                            put("automaticActivityDetection", JSONObject().apply {
+                                put("disabled", false)
+                                put("prefixPaddingMs", 300)
+                                put("silenceDurationMs", 800)
+                            })
+                        })
                     })
                 }
 
                 ws.send(setupPayload.toString())
-                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel, starting live capture immediately")
-                mainHandler.post { listener.onConnected() }
+                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel. Awaiting setupComplete from Google...")
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -122,6 +129,7 @@ class GeminiLiveClient(
 
     private fun handleServerMessage(text: String) {
         try {
+            android.util.Log.d("GeminiLiveClient", "RX: $text")
             val json = JSONObject(text)
 
             // Handle server error message
@@ -137,7 +145,9 @@ class GeminiLiveClient(
             if (json.has("setupComplete")) {
                 android.util.Log.d("GeminiLiveClient", "✅ Server setupComplete received — live session active!")
                 if (setupReady.compareAndSet(false, true)) {
-                    listener.onConnected()
+                    mainHandler.post {
+                        listener.onConnected()
+                    }
                 }
                 return
             }
@@ -237,6 +247,7 @@ class GeminiLiveClient(
 
     fun sendAudioPcm16k(base64: String) {
         val ws = webSocket ?: return
+        if (!setupReady.get()) return // Protocol rule: never send audio before setupComplete
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("audio", JSONObject().apply {
@@ -250,6 +261,7 @@ class GeminiLiveClient(
 
     fun sendVisualFrame(base64Jpeg: String) {
         val ws = webSocket ?: return
+        if (!setupReady.get()) return
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("video", JSONObject().apply {
