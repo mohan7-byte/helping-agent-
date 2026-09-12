@@ -1,6 +1,8 @@
 package com.gemini.live.net
 
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import com.gemini.live.tools.DeviceToolDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +14,7 @@ import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Gemini Live bidirectional WebSocket client.
@@ -39,6 +42,8 @@ class GeminiLiveClient(
 
     private var webSocket: WebSocket? = null
     private var autonomousStepCount = 0
+    private val setupReady = AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun connect(
         apiKey: String,
@@ -47,6 +52,7 @@ class GeminiLiveClient(
         customPrompt: String
     ) {
         if (webSocket != null) return
+        setupReady.set(false)
 
         val endpoint = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${Uri.encode(apiKey)}"
         val request = Request.Builder().url(endpoint).build()
@@ -90,8 +96,15 @@ class GeminiLiveClient(
                 }
 
                 ws.send(setupPayload.toString())
-                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel")
-                listener.onConnected()
+                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel, waiting for setupComplete...")
+
+                // Set a 15-second timeout — if setupComplete never arrives, disconnect with error
+                mainHandler.postDelayed({
+                    if (!setupReady.get() && webSocket != null) {
+                        android.util.Log.e("GeminiLiveClient", "Setup timeout — no setupComplete received in 15s")
+                        cleanUp("Setup timeout: server did not confirm session. Check API key and model.")
+                    }
+                }, 15000)
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
