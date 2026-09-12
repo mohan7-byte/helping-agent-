@@ -10,7 +10,7 @@ import android.net.Uri
 import android.os.BatteryManager
 import android.provider.ContactsContract
 import android.telephony.SmsManager
-import android.view.accessibility.AccessibilityService
+import android.accessibilityservice.AccessibilityService
 import com.gemini.live.ScreenCaptureService
 import com.gemini.live.VolumeTriggerService
 import kotlinx.coroutines.Dispatchers
