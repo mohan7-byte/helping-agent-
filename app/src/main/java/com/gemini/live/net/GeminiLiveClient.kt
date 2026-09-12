@@ -98,7 +98,15 @@ class GeminiLiveClient(
                 ws.send(setupPayload.toString())
                 android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel, waiting for setupComplete...")
 
-                // Set a 15-second timeout — if setupComplete never arrives, disconnect with error
+                // Fallback: If setupComplete is omitted by server, start session after 800ms
+                mainHandler.postDelayed({
+                    if (webSocket != null && setupReady.compareAndSet(false, true)) {
+                        android.util.Log.d("GeminiLiveClient", "Fallback: Starting session after setup delay")
+                        listener.onConnected()
+                    }
+                }, 800)
+
+                // Set a 15-second timeout — if connection never becomes ready, disconnect with error
                 mainHandler.postDelayed({
                     if (!setupReady.get() && webSocket != null) {
                         android.util.Log.e("GeminiLiveClient", "Setup timeout — no setupComplete received in 15s")
@@ -131,9 +139,13 @@ class GeminiLiveClient(
         try {
             val json = JSONObject(text)
 
-            // Log server setup confirmation
+            // Handle setupComplete — Server is ready to receive audio and start talking
             if (json.has("setupComplete")) {
-                android.util.Log.d("GeminiLiveClient", "Server setup complete acknowledged")
+                android.util.Log.d("GeminiLiveClient", "✅ Server setupComplete received — live session active!")
+                if (setupReady.compareAndSet(false, true)) {
+                    listener.onConnected()
+                }
+                return
             }
 
             // Handle Tool Calls
@@ -224,6 +236,7 @@ class GeminiLiveClient(
     }
 
     fun sendAudioPcm16k(base64: String) {
+        if (!setupReady.get()) return
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("audio", JSONObject().apply {
@@ -236,6 +249,7 @@ class GeminiLiveClient(
     }
 
     fun sendVisualFrame(base64Jpeg: String) {
+        if (!setupReady.get()) return
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("video", JSONObject().apply {
@@ -255,6 +269,7 @@ class GeminiLiveClient(
     }
 
     private fun cleanUp(errorMsg: String? = null) {
+        setupReady.set(false)
         webSocket = null
         autonomousStepCount = 0
         listener.onDisconnected(errorMsg)

@@ -74,13 +74,6 @@ class AudioRecorder(
                             continue
                         }
 
-                        // Calculate RMS for speech detection
-                        var sum = 0.0
-                        for (i in 0 until read step 2) {
-                            val sample = (buffer[i].toInt() and 0xFF) or (buffer[i + 1].toInt() shl 8)
-                            sum += sample * sample
-                        }
-
                         val base64 = Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
                         onAudioChunk(base64)
                     }

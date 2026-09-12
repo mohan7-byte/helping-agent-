@@ -78,6 +78,13 @@ class AudioPlayer(
                     if (chunk != null && chunk.isNotEmpty()) {
                         if (!activePlaying) {
                             activePlaying = true
+                            try {
+                                if (track.playState != AudioTrack.PLAYSTATE_PLAYING) {
+                                    track.play()
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
                             onPlaybackStarted()
                         }
                         track.write(chunk, 0, chunk.size)
