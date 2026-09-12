@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/rootBackdrop"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/transparent">
+
+    <!-- Camera Float Preview (Hidden by default) -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cameraBox"
+        android:layout_width="140dp"
+        android:layout_height="105dp"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone"
+        app:cardBackgroundColor="#000000"
+        app:cardCornerRadius="18dp"
+        app:cardElevation="16dp"
+        app:layout_constraintBottom_toTopOf="@+id/capsule"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <androidx.camera.view.PreviewView
+            android:id="@+id/cameraPreviewView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <ImageButton
+            android:id="@+id/flipCameraBtn"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="6dp"
+            android:background="@drawable/bg_icon_btn"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:tint="#FFFFFF"
+            android:contentDescription="Flip Camera" />
+    </androidx.cardview.widget.CardView>
+
+    <!-- Floating Dock Capsule -->
+    <LinearLayout
+        android:id="@+id/capsule"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="36dp"
+        android:background="@drawable/bg_capsule"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <!-- Glowing Orb Canvas -->
+        <com.gemini.live.ui.GlowingOrbView
+            android:id="@+id/orbView"
+            android:layout_width="40dp"
+            android:layout_height="40dp" />
+
+        <!-- Status & Sub Text -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="14dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/capsuleStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif-medium"
+                android:text="Voice"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/capsuleSub"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="sans-serif"
+                android:text="Ready"
+                android:textColor="@color/text_dim"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- Start Button (shown when idle) -->
+        <Button
+            android:id="@+id/connectBtn"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:backgroundTint="@color/card_bg"
+            android:text="Start"
+            android:textAllCaps="false"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            style="@style/Widget.MaterialComponents.Button.UnelevatedButton" />
+
+        <!-- Live Controls (shown when connected) -->
+        <LinearLayout
+            android:id="@+id/liveControls"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:visibility="gone">
+
+            <!-- Toggle Camera Button -->
+            <ImageButton
+                android:id="@+id/toggleCameraBtn"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/bg_icon_btn"
+                android:src="@android:drawable/ic_menu_camera"
+                android:tint="@color/text_primary"
+                android:contentDescription="Camera" />
+
+            <!-- Mute Button -->
+            <ImageButton
+                android:id="@+id/muteBtn"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_icon_btn"
+                android:src="@android:drawable/ic_btn_speak_now"
+                android:tint="@color/text_primary"
+                android:contentDescription="Mute" />
+
+            <!-- End Call Button -->
+            <ImageButton
+                android:id="@+id/disconnectBtn"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/bg_btn_end"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:tint="@color/text_primary"
+                android:contentDescription="End" />
+        </LinearLayout>
+
+        <!-- Settings Button -->
+        <ImageButton
+            android:id="@+id/openSettingsBtn"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_icon_btn"
+            android:src="@android:drawable/ic_menu_manage"
+            android:tint="@color/text_primary"
+            android:contentDescription="Settings" />
+
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,75 @@
+name: Build Voice Native APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+
+      - name: Setup Default App Icon
+        run: |
+          mkdir -p app/src/main/res/mipmap-hdpi
+          mkdir -p app/src/main/res/mipmap-mdpi
+          mkdir -p app/src/main/res/mipmap-xhdpi
+          mkdir -p app/src/main/res/mipmap-xxhdpi
+          mkdir -p app/src/main/res/mipmap-xxxhdpi
+
+          # Fallback clean icon
+          echo "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAATUlEQVR42u3PMQEAAAgEIPuX1hgc/LDBV9JJ6rWTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwBv0hQABH1mYugAAAABJRU5ErkJggg==" | base64 -d > app/src/main/res/mipmap-hdpi/ic_launcher.png
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+          cp app/src/main/res/mipmap-hdpi/ic_launcher.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+
+          if [ -f icon.png ]; then
+            cp icon.png app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+            cp icon.png app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+            cp icon.png app/src/main/res/mipmap-xhdpi/ic_launcher.png
+            cp icon.png app/src/main/res/mipmap-hdpi/ic_launcher.png
+            cp icon.png app/src/main/res/mipmap-mdpi/ic_launcher.png
+          fi
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper --gradle-version 8.5
+
+      - name: Make Gradlew Executable
+        run: chmod +x ./gradlew
+
+      - name: Compile Debug APK
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK as Direct Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Voice-Native-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create Release & Upload APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete v3.0-native --yes || true
+          git tag -d v3.0-native || true
+          gh release create v3.0-native app/build/outputs/apk/debug/app-debug.apk \
+            --title "Voice v3.0 Native (Ultra-Low RAM Edition)" \
+            --notes "Voice v3.0 Native: Pure Kotlin rewrite with direct AudioRecord/AudioTrack PCM streaming, zero WebView/Chromium overhead (~25MB RAM), Candidate ID grounding, Samsung lock screen bypass, and silent grounded web search." || true
