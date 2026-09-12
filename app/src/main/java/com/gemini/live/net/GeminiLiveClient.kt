@@ -213,15 +213,9 @@ class GeminiLiveClient(
     fun sendAudioPcm16k(base64: String) {
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
-                put("mediaChunks", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("data", base64)
-                        put("mimeType", "audio/pcm")
-                    })
-                })
                 put("audio", JSONObject().apply {
-                    put("data", base64)
                     put("mimeType", "audio/pcm;rate=16000")
+                    put("data", base64)
                 })
             })
         }
@@ -231,15 +225,9 @@ class GeminiLiveClient(
     fun sendVisualFrame(base64Jpeg: String) {
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
-                put("mediaChunks", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("data", base64Jpeg)
-                        put("mimeType", "image/jpeg")
-                    })
-                })
                 put("video", JSONObject().apply {
-                    put("data", base64Jpeg)
                     put("mimeType", "image/jpeg")
+                    put("data", base64Jpeg)
                 })
             })
         }
