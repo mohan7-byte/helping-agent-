@@ -24,10 +24,9 @@ class SettingsDialog(
     private val binding get() = _binding!!
 
     private val models = arrayOf(
-        "models/gemini-2.0-flash-exp",
-        "models/gemini-2.0-flash",
-        "models/gemini-2.5-flash",
-        "models/gemini-3.1-flash-live-preview"
+        "models/gemini-3.1-flash-live-preview",
+        "models/gemini-2.5-flash-native-audio-preview-12-2025",
+        "models/gemini-2.5-flash"
     )
 
     private val voices = arrayOf(
@@ -49,12 +48,26 @@ class SettingsDialog(
         super.onViewCreated(view, savedInstanceState)
         val prefs = requireContext().getSharedPreferences("gemini_live_prefs", Context.MODE_PRIVATE)
 
-        // Spinners
-        binding.modelSpinner.adapter = ArrayAdapter(
+        // Model Autocomplete & Quick Preset Buttons
+        val modelAdapter = ArrayAdapter(
             requireContext(),
-            android.R.layout.simple_spinner_dropdown_item,
+            android.R.layout.simple_dropdown_item_1line,
             models
         )
+        binding.modelInput.setAdapter(modelAdapter)
+        binding.modelInput.threshold = 1
+
+        val savedModel = prefs.getString("model", models[0]) ?: models[0]
+        val activeModel = if (savedModel.contains("gemini-2.0") || savedModel.isEmpty()) models[0] else savedModel
+        binding.modelInput.setText(activeModel)
+
+        binding.btnPreset31.setOnClickListener {
+            binding.modelInput.setText("models/gemini-3.1-flash-live-preview")
+        }
+        binding.btnPreset25.setOnClickListener {
+            binding.modelInput.setText("models/gemini-2.5-flash-native-audio-preview-12-2025")
+        }
+
         binding.voiceSpinner.adapter = ArrayAdapter(
             requireContext(),
             android.R.layout.simple_spinner_dropdown_item,
@@ -68,10 +81,6 @@ class SettingsDialog(
         binding.autoConnectToggle.isChecked = prefs.getBoolean("auto_connect", true)
         binding.echoGuardToggle.isChecked = prefs.getBoolean("echo_guard", true)
         binding.btPriorityToggle.isChecked = prefs.getBoolean("bt_priority", true)
-
-        val savedModel = prefs.getString("model", models[0])
-        val modelIdx = models.indexOf(savedModel)
-        if (modelIdx >= 0) binding.modelSpinner.setSelection(modelIdx)
 
         val savedVoice = prefs.getString("voice", voices[0])
         val voiceIdx = voices.indexOf(savedVoice)
@@ -158,6 +167,9 @@ class SettingsDialog(
         // Auto-save settings on dismiss
         val prefs = requireContext().getSharedPreferences("gemini_live_prefs", Context.MODE_PRIVATE)
         _binding?.let { b ->
+            val enteredModel = b.modelInput.text.toString().trim()
+            val finalModel = if (enteredModel.isNotEmpty()) enteredModel else models[0]
+
             prefs.edit()
                 .putString("api_key", b.apiKeyInput.text.toString().trim())
                 .putString("system_prompt", b.systemPromptInput.text.toString().trim())
@@ -165,7 +177,7 @@ class SettingsDialog(
                 .putBoolean("auto_connect", b.autoConnectToggle.isChecked)
                 .putBoolean("echo_guard", b.echoGuardToggle.isChecked)
                 .putBoolean("bt_priority", b.btPriorityToggle.isChecked)
-                .putString("model", models.getOrNull(b.modelSpinner.selectedItemPosition) ?: models[0])
+                .putString("model", finalModel)
                 .putString("voice", voices.getOrNull(b.voiceSpinner.selectedItemPosition) ?: voices[0])
                 .apply()
         }

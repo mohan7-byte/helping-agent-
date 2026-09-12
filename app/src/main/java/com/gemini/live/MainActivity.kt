@@ -226,9 +226,9 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
             return
         }
 
-        var model = prefs.getString("model", "models/gemini-2.0-flash-exp") ?: "models/gemini-2.0-flash-exp"
-        if (model.contains("gemini-3.1") || model.isEmpty()) {
-            model = "models/gemini-2.0-flash-exp"
+        var model = prefs.getString("model", "models/gemini-3.1-flash-live-preview") ?: "models/gemini-3.1-flash-live-preview"
+        if (model.contains("gemini-2.0") || model.isEmpty()) {
+            model = "models/gemini-3.1-flash-live-preview"
         }
         val voice = prefs.getString("voice", "Aoede") ?: "Aoede"
         val prompt = prefs.getString("system_prompt", "") ?: ""
