@@ -24,9 +24,10 @@ class SettingsDialog(
     private val binding get() = _binding!!
 
     private val models = arrayOf(
-        "models/gemini-3.1-flash-live-preview",
-        "models/gemini-2.5-flash-native-audio-preview-12-2025",
-        "models/gemini-2.0-flash-exp"
+        "models/gemini-2.0-flash-exp",
+        "models/gemini-2.0-flash",
+        "models/gemini-2.5-flash",
+        "models/gemini-3.1-flash-live-preview"
     )
 
     private val voices = arrayOf(

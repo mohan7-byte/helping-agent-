@@ -25,7 +25,7 @@ class GeminiLiveClient(
 ) {
     interface Listener {
         fun onConnected()
-        fun onDisconnected()
+        fun onDisconnected(errorMsg: String? = null)
         fun onAudioData(base64Pcm24k: String)
         fun onInterrupted()
         fun onTurnComplete()
@@ -65,10 +65,11 @@ class GeminiLiveClient(
                         "Answer all questions about the current time, weekday, and date immediately from this telemetry without calling any tool."
 
                 val prompt = (customPrompt.ifEmpty { DEFAULT_SYSTEM_PROMPT }) + telemetry
+                val formattedModel = if (model.startsWith("models/")) model else "models/$model"
 
                 val setupPayload = JSONObject().apply {
                     put("setup", JSONObject().apply {
-                        put("model", model)
+                        put("model", formattedModel)
                         put("generationConfig", JSONObject().apply {
                             put("responseModalities", JSONArray().apply { put("AUDIO") })
                             put("speechConfig", JSONObject().apply {
@@ -89,7 +90,8 @@ class GeminiLiveClient(
                 }
 
                 ws.send(setupPayload.toString())
-                listener.onStatusChanged("working", "Handshake...", "Negotiating audio...")
+                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel")
+                listener.onConnected()
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -99,40 +101,26 @@ class GeminiLiveClient(
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
                 val msg = if (reason.isNotEmpty()) reason else "Code $code"
                 android.util.Log.w("GeminiLiveClient", "WebSocket closing: $code / $reason")
-                if (code != 1000) {
-                    listener.onStatusChanged("idle", "Closed", msg.take(30))
-                }
                 ws.close(1000, null)
-                cleanUp()
+                cleanUp(if (code != 1000) msg else null)
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
                 val respBody = try { response?.body?.string() } catch (ignored: Exception) { null }
                 val errorMsg = respBody ?: t.localizedMessage ?: "Connection failed"
                 android.util.Log.e("GeminiLiveClient", "WebSocket failure: $errorMsg", t)
-                listener.onStatusChanged("idle", "Error", errorMsg.take(35))
-                cleanUp()
+                cleanUp(errorMsg)
             }
         })
     }
-
-    private var isHandshakeDone = false
 
     private fun handleServerMessage(text: String) {
         try {
             val json = JSONObject(text)
 
-            // Setup confirmation
+            // Log server setup confirmation
             if (json.has("setupComplete")) {
-                isHandshakeDone = true
-                listener.onConnected()
-                return
-            }
-
-            // If we receive any serverContent or toolCall, mark connected if not already
-            if (!isHandshakeDone && (json.has("serverContent") || json.has("toolCall"))) {
-                isHandshakeDone = true
-                listener.onConnected()
+                android.util.Log.d("GeminiLiveClient", "Server setup complete acknowledged")
             }
 
             // Handle Tool Calls
@@ -225,6 +213,12 @@ class GeminiLiveClient(
     fun sendAudioPcm16k(base64: String) {
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
+                put("mediaChunks", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("data", base64)
+                        put("mimeType", "audio/pcm")
+                    })
+                })
                 put("audio", JSONObject().apply {
                     put("data", base64)
                     put("mimeType", "audio/pcm;rate=16000")
@@ -237,6 +231,12 @@ class GeminiLiveClient(
     fun sendVisualFrame(base64Jpeg: String) {
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
+                put("mediaChunks", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("data", base64Jpeg)
+                        put("mimeType", "image/jpeg")
+                    })
+                })
                 put("video", JSONObject().apply {
                     put("data", base64Jpeg)
                     put("mimeType", "image/jpeg")
@@ -250,14 +250,13 @@ class GeminiLiveClient(
         try {
             webSocket?.close(1000, "User disconnect")
         } catch (ignored: Exception) {}
-        cleanUp()
+        cleanUp(null)
     }
 
-    private fun cleanUp() {
+    private fun cleanUp(errorMsg: String? = null) {
         webSocket = null
         autonomousStepCount = 0
-        isHandshakeDone = false
-        listener.onDisconnected()
+        listener.onDisconnected(errorMsg)
     }
 
     companion object {

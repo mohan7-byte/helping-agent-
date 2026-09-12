@@ -30,11 +30,11 @@ class AudioRecorder(
         if (isRecording.get()) return
 
         val minBufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-        val bufferSize = Math.max(minBufferSize, 2048)
+        val bufferSize = Math.max(minBufferSize * 2, 4096)
 
         try {
             audioRecord = AudioRecord(
-                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MediaRecorder.AudioSource.MIC,
                 sampleRate,
                 channelConfig,
                 audioFormat,
@@ -43,7 +43,17 @@ class AudioRecorder(
 
             if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
                 audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.MIC,
+                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                    sampleRate,
+                    channelConfig,
+                    audioFormat,
+                    bufferSize
+                )
+            }
+
+            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                audioRecord = AudioRecord(
+                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
                     sampleRate,
                     channelConfig,
                     audioFormat,

@@ -226,12 +226,15 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
             return
         }
 
-        val model = prefs.getString("model", "models/gemini-3.1-flash-live-preview") ?: "models/gemini-3.1-flash-live-preview"
+        var model = prefs.getString("model", "models/gemini-2.0-flash-exp") ?: "models/gemini-2.0-flash-exp"
+        if (model.contains("gemini-3.1") || model.isEmpty()) {
+            model = "models/gemini-2.0-flash-exp"
+        }
         val voice = prefs.getString("voice", "Aoede") ?: "Aoede"
         val prompt = prefs.getString("system_prompt", "") ?: ""
 
         binding.capsuleStatus.text = "Connecting..."
-        binding.capsuleSub.text = "Initiating handshake"
+        binding.capsuleSub.text = "Starting session"
         binding.orbView.setState(GlowingOrbView.State.WORKING)
 
         geminiClient?.connect(apiKey, model, voice, prompt)
@@ -338,9 +341,17 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
         }
     }
 
-    override fun onDisconnected() {
+    override fun onDisconnected(errorMsg: String?) {
         runOnUiThread {
-            endLiveSession()
+            if (!errorMsg.isNullOrEmpty()) {
+                Toast.makeText(this, errorMsg, Toast.LENGTH_LONG).show()
+                binding.capsuleStatus.text = "Error"
+                binding.capsuleSub.text = errorMsg.take(28)
+                binding.orbView.setState(GlowingOrbView.State.IDLE)
+                mainHandler.postDelayed({ endLiveSession() }, 3000)
+            } else {
+                endLiveSession()
+            }
         }
     }
 

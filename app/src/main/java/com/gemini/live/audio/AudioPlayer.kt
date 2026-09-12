@@ -27,11 +27,11 @@ class AudioPlayer(
     private val audioQueue = LinkedBlockingQueue<ByteArray>()
     private var playbackThread: Thread? = null
 
-    init {
-        initAudioTrack()
-    }
-
-    private fun initAudioTrack() {
+    private fun ensureAudioTrack(): AudioTrack? {
+        val current = audioTrack
+        if (current != null && current.state == AudioTrack.STATE_INITIALIZED) {
+            return current
+        }
         val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat)
         val bufferSize = Math.max(minBufferSize * 2, 4096)
 
@@ -46,20 +46,26 @@ class AudioPlayer(
             .setEncoding(audioFormat)
             .build()
 
-        audioTrack = AudioTrack(
-            audioAttributes,
-            format,
-            bufferSize,
-            AudioTrack.MODE_STREAM,
-            AudioManager.AUDIO_SESSION_ID_GENERATE
-        )
+        return try {
+            AudioTrack(
+                audioAttributes,
+                format,
+                bufferSize,
+                AudioTrack.MODE_STREAM,
+                AudioManager.AUDIO_SESSION_ID_GENERATE
+            ).also { audioTrack = it }
+        } catch (e: Exception) {
+            android.util.Log.e("AudioPlayer", "Failed to create AudioTrack: ${e.message}", e)
+            null
+        }
     }
 
     fun start() {
         if (isPlaying.get()) return
+        val track = ensureAudioTrack() ?: return
         isPlaying.set(true)
         try {
-            audioTrack?.play()
+            track.play()
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -74,7 +80,7 @@ class AudioPlayer(
                             activePlaying = true
                             onPlaybackStarted()
                         }
-                        audioTrack?.write(chunk, 0, chunk.size)
+                        track.write(chunk, 0, chunk.size)
                     } else {
                         if (activePlaying && audioQueue.isEmpty()) {
                             activePlaying = false
