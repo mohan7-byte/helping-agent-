@@ -123,10 +123,12 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
     private fun initAudio() {
         audioRecorder = AudioRecorder(
             context = applicationContext,
-            onSpeechDetected = {
+            onSpeechDetected = { amp ->
                 runOnUiThread {
-                    if (binding.capsuleStatus.text == "Listening") {
-                        binding.capsuleSub.text = "Hearing you..."
+                    if (binding.capsuleStatus.text == "Listening" || binding.capsuleStatus.text.startsWith("Hearing")) {
+                        val percent = (amp * 100 / 6000).coerceIn(1, 100)
+                        binding.capsuleStatus.text = "Hearing you ($percent%)"
+                        binding.capsuleSub.text = "Streaming to Gemini"
                         resetInactivityTimer()
                     }
                 }
@@ -255,15 +257,19 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
         binding.capsuleSub.text = "Starting session"
         binding.orbView.setState(GlowingOrbView.State.WORKING)
 
-        // Set communication audio mode & speakerphone for Samsung hardware AEC and clear recording
+        // Ensure volumes are high and unmuted
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            audioManager?.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
             audioManager?.isSpeakerphoneOn = true
-            val maxVol = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 15
-            val currentVol = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 0
-            if (currentVol < (maxVol * 0.5).toInt()) {
-                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
+            val maxMusic = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 15
+            val curMusic = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: 0
+            if (curMusic < (maxMusic * 0.6).toInt()) {
+                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (maxMusic * 0.85).toInt(), 0)
+            }
+            val maxCall = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 15
+            val curCall = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 0
+            if (curCall < (maxCall * 0.6).toInt()) {
+                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, (maxCall * 0.85).toInt(), 0)
             }
         } catch (ignored: Exception) {}
 

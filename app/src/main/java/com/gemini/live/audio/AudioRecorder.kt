@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class AudioRecorder(
     private val context: Context,
-    private val onSpeechDetected: (() -> Unit)? = null,
+    private val onSpeechDetected: ((amplitude: Int) -> Unit)? = null,
     private val onAudioChunk: (String) -> Unit,
     private val onError: ((String) -> Unit)? = null
 ) {
@@ -63,10 +63,10 @@ class AudioRecorder(
         // Prioritize hardware native rate (48kHz on Samsung) first so HAL does not return zeros!
         val sampleRatesToTry = intArrayOf(nativeRate, 48000, 44100, 16000).distinct().toIntArray()
         val sourcesToTry = intArrayOf(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            MediaRecorder.AudioSource.DEFAULT
+            MediaRecorder.AudioSource.DEFAULT,
+            MediaRecorder.AudioSource.VOICE_COMMUNICATION
         )
 
         var initializedRecord: AudioRecord? = null
@@ -162,8 +162,9 @@ class AudioRecorder(
 
                     if (maxSample == 0) {
                         zeroBufferCount++
-                        if (zeroBufferCount == 50) {
-                            android.util.Log.w("AudioRecorder", "Warning: 50 consecutive zero-amplitude audio buffers received from microphone")
+                        if (zeroBufferCount == 30) {
+                            android.util.Log.w("AudioRecorder", "Warning: 30 consecutive zero-amplitude audio buffers received from microphone")
+                            onError?.invoke("Microphone recording silence (0 amplitude). Check Android mic permissions.")
                         }
                     } else {
                         zeroBufferCount = 0
@@ -171,7 +172,7 @@ class AudioRecorder(
 
                     // Speech threshold (300 amplitude is noticeable speech)
                     if (maxSample > 300) {
-                        onSpeechDetected?.invoke()
+                        onSpeechDetected?.invoke(maxSample)
                     }
 
                     val base64 = Base64.encodeToString(pcm16kBytes, Base64.NO_WRAP)
