@@ -77,20 +77,12 @@ object GeminiToolsSchema {
         declarations.put(JSONObject().apply {
             put("name", "clear_text")
             put("description", "Completely clear/delete all existing text in the active editable input field.")
-            put("parameters", JSONObject().apply {
-                put("type", "OBJECT")
-                put("properties", JSONObject())
-            })
         })
 
         // get_device_info
         declarations.put(JSONObject().apply {
             put("name", "get_device_info")
             put("description", "Get real-time local time, date, battery level, network status, and device telemetry without opening the browser.")
-            put("parameters", JSONObject().apply {
-                put("type", "OBJECT")
-                put("properties", JSONObject())
-            })
         })
 
         // save_app_rule
@@ -211,20 +203,12 @@ object GeminiToolsSchema {
         declarations.put(JSONObject().apply {
             put("name", "read_screen_text")
             put("description", "Read and inspect all visible text, interactive buttons, inputs, and candidate IDs (#0, #1, #2...) currently on screen.")
-            put("parameters", JSONObject().apply {
-                put("type", "OBJECT")
-                put("properties", JSONObject())
-            })
         })
 
         // capture_screen
         declarations.put(JSONObject().apply {
             put("name", "capture_screen")
             put("description", "Capture a real-time full display screenshot and inject it directly into your visual input feed.")
-            put("parameters", JSONObject().apply {
-                put("type", "OBJECT")
-                put("properties", JSONObject())
-            })
         })
 
         // open_application

@@ -76,9 +76,23 @@ class SettingsDialog(
         val voiceIdx = voices.indexOf(savedVoice)
         if (voiceIdx >= 0) binding.voiceSpinner.setSelection(voiceIdx)
 
-        // Load Rules JSON
+        // Load Rules JSON from Documents/Voice/rules.json (or prefs/fallback)
         val rulesPrefs = requireContext().getSharedPreferences("jarvis_rules", Context.MODE_PRIVATE)
-        binding.rulesEditor.setText(rulesPrefs.getString("rules", ""))
+        val docsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOCUMENTS)
+        val publicRulesFile = File(File(docsDir, "Voice"), "rules.json")
+        val fallbackRulesFile = File(requireContext().getExternalFilesDir(null), "rules.json")
+
+        var loadedRules = ""
+        if (publicRulesFile.exists() && publicRulesFile.length() > 0) {
+            try { loadedRules = publicRulesFile.readText() } catch (ignored: Exception) {}
+        }
+        if (loadedRules.isEmpty() && fallbackRulesFile.exists() && fallbackRulesFile.length() > 0) {
+            try { loadedRules = fallbackRulesFile.readText() } catch (ignored: Exception) {}
+        }
+        if (loadedRules.isEmpty()) {
+            loadedRules = rulesPrefs.getString("rules", "") ?: ""
+        }
+        binding.rulesEditor.setText(loadedRules)
 
         // Handlers
         binding.closeSheetBtn.setOnClickListener { dismiss() }
@@ -92,9 +106,19 @@ class SettingsDialog(
                 val text = binding.rulesEditor.text.toString().trim()
                 org.json.JSONObject(text) // Validate JSON
                 rulesPrefs.edit().putString("rules", text).apply()
-                val file = File(requireContext().getExternalFilesDir(null), "jarvis_app_rules.json")
-                file.writeText(text)
-                Toast.makeText(requireContext(), "Playbook rules saved!", Toast.LENGTH_SHORT).show()
+
+                var savedPath = ""
+                try {
+                    publicRulesFile.parentFile?.mkdirs()
+                    publicRulesFile.writeText(text)
+                    savedPath = publicRulesFile.absolutePath
+                } catch (e: Exception) {
+                    fallbackRulesFile.parentFile?.mkdirs()
+                    fallbackRulesFile.writeText(text)
+                    savedPath = fallbackRulesFile.absolutePath
+                }
+
+                Toast.makeText(requireContext(), "Saved to Documents/Voice/rules.json", Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
                 Toast.makeText(requireContext(), "Invalid JSON: ${e.message}", Toast.LENGTH_SHORT).show()
             }
@@ -102,15 +126,29 @@ class SettingsDialog(
 
         binding.openFileManagerBtn.setOnClickListener {
             try {
-                val file = File(requireContext().getExternalFilesDir(null), "jarvis_app_rules.json")
-                val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.provider", file)
+                val targetFile = if (publicRulesFile.exists()) publicRulesFile else fallbackRulesFile
+                if (!targetFile.exists()) {
+                    targetFile.parentFile?.mkdirs()
+                    targetFile.writeText(binding.rulesEditor.text.toString().ifEmpty { "{}" })
+                }
+
                 val intent = Intent(Intent.ACTION_VIEW).apply {
-                    setDataAndType(uri, "application/json")
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    val uri = Uri.parse(targetFile.parentFile?.absolutePath ?: targetFile.absolutePath)
+                    setDataAndType(Uri.fromFile(targetFile), "application/json")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 startActivity(intent)
             } catch (e: Exception) {
-                Toast.makeText(requireContext(), "Saved in: ${requireContext().getExternalFilesDir(null)}", Toast.LENGTH_LONG).show()
+                // Fallback: Open system file manager or show full path
+                try {
+                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = "*/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                    }
+                    startActivity(intent)
+                } catch (ignored: Exception) {
+                    Toast.makeText(requireContext(), "Location: Documents/Voice/rules.json", Toast.LENGTH_LONG).show()
+                }
             }
         }
     }

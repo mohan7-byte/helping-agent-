@@ -44,6 +44,7 @@ class VolumeTriggerService : AccessibilityService() {
     // Cached hardware bounds & nodes for candidate element IDs (#0, #1, #2...)
     val activeCandidateBounds = ArrayList<Rect>()
     val activeCandidateNodes = ArrayList<AccessibilityNodeInfo>()
+    var currentPackageName: String = ""
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -66,6 +67,12 @@ class VolumeTriggerService : AccessibilityService() {
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
         val type = event.eventType
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            if (!pkg.isNullOrEmpty() && pkg != packageName) {
+                currentPackageName = pkg
+            }
+        }
         if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED || type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             autoApproveDialogs()
         }

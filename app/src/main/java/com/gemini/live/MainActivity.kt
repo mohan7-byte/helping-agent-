@@ -213,6 +213,11 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
     }
 
     private fun startLiveSession() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            permissionsLauncher.launch(arrayOf(Manifest.permission.RECORD_AUDIO))
+            return
+        }
+
         val prefs = getSharedPreferences("gemini_live_prefs", Context.MODE_PRIVATE)
         val apiKey = prefs.getString("api_key", "") ?: ""
         if (apiKey.isEmpty()) {

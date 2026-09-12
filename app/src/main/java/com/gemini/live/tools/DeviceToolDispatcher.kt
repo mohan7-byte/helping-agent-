@@ -8,6 +8,7 @@ import android.hardware.camera2.CameraManager
 import android.media.AudioManager
 import android.net.Uri
 import android.os.BatteryManager
+import android.os.Environment
 import android.provider.ContactsContract
 import android.telephony.SmsManager
 import android.accessibilityservice.AccessibilityService
@@ -40,20 +41,59 @@ class DeviceToolDispatcher(
         .readTimeout(15, TimeUnit.SECONDS)
         .build()
 
-    // Persistent Playbook Storage
+    // Persistent Playbook Storage in Documents/Voice/rules.json (manual and AI editable)
     private val prefs = context.getSharedPreferences("jarvis_rules", Context.MODE_PRIVATE)
 
+    fun getRulesFile(): File {
+        return try {
+            val docsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS)
+            val voiceDir = File(docsDir, "Voice")
+            if (!voiceDir.exists()) voiceDir.mkdirs()
+            File(voiceDir, "rules.json")
+        } catch (e: Exception) {
+            val fallbackDir = File(context.getExternalFilesDir(null), "Voice")
+            if (!fallbackDir.exists()) fallbackDir.mkdirs()
+            File(fallbackDir, "rules.json")
+        }
+    }
+
     fun getSavedRulesJson(): String {
-        return prefs.getString("rules", getDefaultAppRulesJson()) ?: getDefaultAppRulesJson()
+        try {
+            val file = getRulesFile()
+            if (file.exists() && file.length() > 0) {
+                val content = file.readText().trim()
+                if (content.startsWith("{")) {
+                    return content
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("DeviceToolDispatcher", "Reading rules.json failed: ${e.message}")
+        }
+        val defaultRules = prefs.getString("rules", getDefaultAppRulesJson()) ?: getDefaultAppRulesJson()
+        // Ensure the file exists with default rules
+        try {
+            val file = getRulesFile()
+            if (!file.exists()) {
+                file.parentFile?.mkdirs()
+                file.writeText(defaultRules)
+            }
+        } catch (ignored: Exception) {}
+        return defaultRules
     }
 
     fun saveRulesJson(json: String) {
         prefs.edit().putString("rules", json).apply()
-        // Save to external files directory for user inspection
         try {
-            val file = File(context.getExternalFilesDir(null), "jarvis_app_rules.json")
+            val file = getRulesFile()
+            file.parentFile?.mkdirs()
             file.writeText(json)
-        } catch (ignored: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.e("DeviceToolDispatcher", "Writing rules.json failed: ${e.message}")
+            try {
+                val fallbackFile = File(context.getExternalFilesDir(null), "rules.json")
+                fallbackFile.writeText(json)
+            } catch (ignored: Exception) {}
+        }
     }
 
     private fun getDefaultAppRulesJson(): String {
@@ -228,17 +268,25 @@ class DeviceToolDispatcher(
                     val service = VolumeTriggerService.instance ?: return@withContext "Accessibility Service required."
                     val rawScreen = service.readScreenText()
 
-                    // Match Playbooks & Learned Rules
+                    // Contextual Rule Grounding: Load ONLY the rule for the active foreground app/package
                     var playbookTip = ""
                     try {
+                        val fgPkg = service.currentPackageName
                         val rulesObj = JSONObject(getSavedRulesJson())
                         val keys = rulesObj.keys()
                         while (keys.hasNext()) {
                             val pkg = keys.next()
                             val data = rulesObj.optJSONObject(pkg) ?: continue
                             val appName = data.optString("app_name", "")
-                            if (rawScreen.contains(pkg) || (appName.isNotEmpty() && rawScreen.contains(appName, ignoreCase = true))) {
-                                playbookTip += "\n[PLAYBOOK TIP FOR ${if (appName.isNotEmpty()) appName else pkg}]:\n"
+
+                            // Precise contextual match: active package or foreground screen name
+                            val isMatch = (fgPkg.isNotEmpty() && fgPkg.equals(pkg, ignoreCase = true)) ||
+                                          rawScreen.contains(pkg) ||
+                                          (appName.isNotEmpty() && rawScreen.contains(appName, ignoreCase = true))
+
+                            if (isMatch) {
+                                val label = if (appName.isNotEmpty()) appName else pkg
+                                playbookTip += "\n[SPECIFIC RULE FOR $label]:\n"
                                 val actions = data.optJSONObject("actions")
                                 if (actions != null) {
                                     val actKeys = actions.keys()
@@ -246,7 +294,7 @@ class DeviceToolDispatcher(
                                         val k = actKeys.next()
                                         val c = actions.optJSONObject(k)
                                         if (c != null) {
-                                            playbookTip += "- Target \"$k\" is at exact coordinates (${c.optInt("x")}, ${c.optInt("y")})\n"
+                                            playbookTip += "- Target \"$k\": (${c.optInt("x")}, ${c.optInt("y")})\n"
                                         }
                                     }
                                 }
@@ -256,6 +304,8 @@ class DeviceToolDispatcher(
                                         playbookTip += "- Rule: ${rulesList.getString(i)}\n"
                                     }
                                 }
+                                // Break early: contextual rule grounding loads the single exact matching rule!
+                                break
                             }
                         }
                     } catch (ignored: Exception) {}

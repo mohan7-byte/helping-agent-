@@ -89,7 +89,7 @@ class GeminiLiveClient(
                 }
 
                 ws.send(setupPayload.toString())
-                listener.onConnected()
+                listener.onStatusChanged("working", "Handshake...", "Negotiating audio...")
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -97,22 +97,43 @@ class GeminiLiveClient(
             }
 
             override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                val msg = if (reason.isNotEmpty()) reason else "Code $code"
+                android.util.Log.w("GeminiLiveClient", "WebSocket closing: $code / $reason")
+                if (code != 1000) {
+                    listener.onStatusChanged("idle", "Closed", msg.take(30))
+                }
                 ws.close(1000, null)
                 cleanUp()
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                val errorMsg = t.localizedMessage ?: "Connection failed"
+                val respBody = try { response?.body?.string() } catch (ignored: Exception) { null }
+                val errorMsg = respBody ?: t.localizedMessage ?: "Connection failed"
                 android.util.Log.e("GeminiLiveClient", "WebSocket failure: $errorMsg", t)
-                listener.onStatusChanged("idle", "Connection Error", errorMsg.take(30))
+                listener.onStatusChanged("idle", "Error", errorMsg.take(35))
                 cleanUp()
             }
         })
     }
 
+    private var isHandshakeDone = false
+
     private fun handleServerMessage(text: String) {
         try {
             val json = JSONObject(text)
+
+            // Setup confirmation
+            if (json.has("setupComplete")) {
+                isHandshakeDone = true
+                listener.onConnected()
+                return
+            }
+
+            // If we receive any serverContent or toolCall, mark connected if not already
+            if (!isHandshakeDone && (json.has("serverContent") || json.has("toolCall"))) {
+                isHandshakeDone = true
+                listener.onConnected()
+            }
 
             // Handle Tool Calls
             val toolCall = json.optJSONObject("toolCall")
@@ -235,6 +256,7 @@ class GeminiLiveClient(
     private fun cleanUp() {
         webSocket = null
         autonomousStepCount = 0
+        isHandshakeDone = false
         listener.onDisconnected()
     }
 
