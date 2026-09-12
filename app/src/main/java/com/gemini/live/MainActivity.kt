@@ -133,6 +133,13 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
             onAudioChunk = { pcmBase64 ->
                 resetInactivityTimer()
                 geminiClient?.sendAudioPcm16k(pcmBase64)
+            },
+            onError = { errMsg ->
+                runOnUiThread {
+                    binding.capsuleStatus.text = "Mic Error"
+                    binding.capsuleSub.text = errMsg.take(28)
+                    Toast.makeText(this, errMsg, Toast.LENGTH_LONG).show()
+                }
             }
         )
 
@@ -390,7 +397,7 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
     }
 
     override fun onTurnComplete() {
-        // audioPlayer handles onPlaybackFinished callback
+        audioPlayer?.markTurnComplete()
     }
 
     override fun onStatusChanged(state: String, title: String, sub: String) {

@@ -4,7 +4,6 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.os.Build
 import android.util.Base64
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
@@ -12,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * Ultra-low RAM native AudioPlayer.
  * Plays 24kHz 16-bit Mono streaming PCM received from Gemini Live API.
- * Supports instant interrupt/barge-in clearing.
+ * Accurately tracks turn completion and supports instant interrupt/barge-in clearing.
  */
 class AudioPlayer(
     private val onPlaybackStarted: () -> Unit,
@@ -24,6 +23,7 @@ class AudioPlayer(
 
     private var audioTrack: AudioTrack? = null
     private val isPlaying = AtomicBoolean(false)
+    private val isTurnCompletePending = AtomicBoolean(false)
     private val audioQueue = LinkedBlockingQueue<ByteArray>()
     private var playbackThread: Thread? = null
 
@@ -33,7 +33,7 @@ class AudioPlayer(
             return current
         }
         val minBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat)
-        val bufferSize = Math.max(minBufferSize * 2, 4096)
+        val bufferSize = Math.max(minBufferSize * 4, 16384)
 
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -64,6 +64,7 @@ class AudioPlayer(
         if (isPlaying.get()) return
         val track = ensureAudioTrack() ?: return
         isPlaying.set(true)
+        isTurnCompletePending.set(false)
         try {
             track.play()
         } catch (e: Exception) {
@@ -74,7 +75,7 @@ class AudioPlayer(
             var activePlaying = false
             while (isPlaying.get()) {
                 try {
-                    val chunk = audioQueue.poll(150, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    val chunk = audioQueue.poll(100, java.util.concurrent.TimeUnit.MILLISECONDS)
                     if (chunk != null && chunk.isNotEmpty()) {
                         if (!activePlaying) {
                             activePlaying = true
@@ -87,11 +88,17 @@ class AudioPlayer(
                             }
                             onPlaybackStarted()
                         }
-                        track.write(chunk, 0, chunk.size)
+                        track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING)
                     } else {
-                        if (activePlaying && audioQueue.isEmpty()) {
-                            activePlaying = false
-                            onPlaybackFinished()
+                        // Only finish playback if Gemini signaled turnComplete AND queue is completely empty
+                        if (activePlaying && isTurnCompletePending.get() && audioQueue.isEmpty()) {
+                            // Short grace period (250ms) to ensure hardware buffer has emitted audio to speaker
+                            try { Thread.sleep(250) } catch (ignored: Exception) {}
+                            if (audioQueue.isEmpty()) {
+                                activePlaying = false
+                                isTurnCompletePending.set(false)
+                                onPlaybackFinished()
+                            }
                         }
                     }
                 } catch (e: InterruptedException) {
@@ -116,8 +123,13 @@ class AudioPlayer(
         }
     }
 
+    fun markTurnComplete() {
+        isTurnCompletePending.set(true)
+    }
+
     fun interrupt() {
         audioQueue.clear()
+        isTurnCompletePending.set(false)
         try {
             audioTrack?.pause()
             audioTrack?.flush()
@@ -128,11 +140,11 @@ class AudioPlayer(
 
     fun stop() {
         if (!isPlaying.compareAndSet(true, false)) {
-            // Already stopped or stopping
             audioQueue.clear()
             return
         }
         audioQueue.clear()
+        isTurnCompletePending.set(false)
         val threadToStop = playbackThread
         val trackToRelease = audioTrack
         playbackThread = null
