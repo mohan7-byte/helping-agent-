@@ -76,6 +76,7 @@ class GeminiLiveClient(
                 val setupPayload = JSONObject().apply {
                     put("setup", JSONObject().apply {
                         put("model", formattedModel)
+                        put("responseModalities", JSONArray().apply { put("AUDIO") })
                         put("generationConfig", JSONObject().apply {
                             put("responseModalities", JSONArray().apply { put("AUDIO") })
                             put("speechConfig", JSONObject().apply {
@@ -139,6 +140,15 @@ class GeminiLiveClient(
         try {
             val json = JSONObject(text)
 
+            // Handle server error message
+            if (json.has("error")) {
+                val errObj = json.optJSONObject("error")
+                val errMsg = errObj?.optString("message") ?: "Server error"
+                android.util.Log.e("GeminiLiveClient", "Gemini error received: $errMsg")
+                cleanUp(errMsg)
+                return
+            }
+
             // Handle setupComplete — Server is ready to receive audio and start talking
             if (json.has("setupComplete")) {
                 android.util.Log.d("GeminiLiveClient", "✅ Server setupComplete received — live session active!")
@@ -188,6 +198,12 @@ class GeminiLiveClient(
                     val audioData = inlineData?.optString("data") ?: p.optString("data", "")
                     if (audioData.isNotEmpty()) {
                         listener.onAudioData(audioData)
+                    } else if (p.has("text")) {
+                        val txt = p.optString("text", "").trim()
+                        if (txt.isNotEmpty()) {
+                            android.util.Log.d("GeminiLiveClient", "Model text reply: $txt")
+                            listener.onStatusChanged("speaking", "Jarvis", txt.take(30))
+                        }
                     }
                 }
             }

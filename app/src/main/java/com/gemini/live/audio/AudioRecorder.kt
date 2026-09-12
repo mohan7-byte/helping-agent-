@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Zero browser/WebAudio overhead!
  */
 class AudioRecorder(
+    private val onSpeechDetected: (() -> Unit)? = null,
     private val onAudioChunk: (String) -> Unit
 ) {
     private val sampleRate = 16000
@@ -33,36 +34,33 @@ class AudioRecorder(
         val bufferSize = Math.max(minBufferSize * 2, 4096)
 
         try {
-            audioRecord = AudioRecord(
+            val sources = intArrayOf(
                 MediaRecorder.AudioSource.MIC,
-                sampleRate,
-                channelConfig,
-                audioFormat,
-                bufferSize
+                MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                MediaRecorder.AudioSource.DEFAULT
             )
 
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize
-                )
+            for (src in sources) {
+                try {
+                    val candidate = AudioRecord(src, sampleRate, channelConfig, audioFormat, bufferSize)
+                    if (candidate.state == AudioRecord.STATE_INITIALIZED) {
+                        audioRecord = candidate
+                        break
+                    } else {
+                        candidate.release()
+                    }
+                } catch (ignored: Exception) {}
             }
 
-            if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-                audioRecord = AudioRecord(
-                    MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                    sampleRate,
-                    channelConfig,
-                    audioFormat,
-                    bufferSize
-                )
+            if (audioRecord == null || audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+                android.util.Log.e("AudioRecorder", "Failed to initialize AudioRecord with any source!")
+                return
             }
 
             audioRecord?.startRecording()
             isRecording.set(true)
+            android.util.Log.d("AudioRecorder", "AudioRecord started successfully, recording 16kHz PCM")
 
             recordingThread = Thread({
                 val buffer = ByteArray(2048)
@@ -70,8 +68,19 @@ class AudioRecorder(
                     val read = audioRecord?.read(buffer, 0, buffer.size) ?: 0
                     if (read > 0) {
                         if (isMuted || echoGuardActive) {
-                            // Suppress mic capture during model speaking or muted
                             continue
+                        }
+
+                        // Calculate max sample amplitude to detect active speech
+                        var maxSample = 0
+                        for (i in 0 until read step 2) {
+                            val sample = Math.abs(((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xFF)).toShort().toInt())
+                            if (sample > maxSample) maxSample = sample
+                        }
+
+                        // If user is actively speaking (amplitude > 600), trigger visual speech callback
+                        if (maxSample > 600) {
+                            onSpeechDetected?.invoke()
                         }
 
                         val base64 = Base64.encodeToString(buffer, 0, read, Base64.NO_WRAP)
@@ -83,7 +92,7 @@ class AudioRecorder(
                 start()
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            android.util.Log.e("AudioRecorder", "Error starting AudioRecord: ${e.message}", e)
         }
     }
 

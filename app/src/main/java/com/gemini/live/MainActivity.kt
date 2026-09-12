@@ -121,10 +121,20 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
     }
 
     private fun initAudio() {
-        audioRecorder = AudioRecorder { pcmBase64 ->
-            resetInactivityTimer()
-            geminiClient?.sendAudioPcm16k(pcmBase64)
-        }
+        audioRecorder = AudioRecorder(
+            onSpeechDetected = {
+                runOnUiThread {
+                    if (binding.capsuleStatus.text == "Listening") {
+                        binding.capsuleSub.text = "Hearing you..."
+                        resetInactivityTimer()
+                    }
+                }
+            },
+            onAudioChunk = { pcmBase64 ->
+                resetInactivityTimer()
+                geminiClient?.sendAudioPcm16k(pcmBase64)
+            }
+        )
 
         audioPlayer = AudioPlayer(
             onPlaybackStarted = {
@@ -236,6 +246,16 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
         binding.capsuleStatus.text = "Connecting..."
         binding.capsuleSub.text = "Starting session"
         binding.orbView.setState(GlowingOrbView.State.WORKING)
+
+        // Ensure media volume is not muted so user can hear the AI speak
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            val currentVol = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: 0
+            if (currentVol == 0) {
+                val maxVol = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 15
+                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (maxVol * 0.75).toInt(), 0)
+            }
+        } catch (ignored: Exception) {}
 
         geminiClient?.connect(apiKey, model, voice, prompt)
     }
