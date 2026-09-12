@@ -122,6 +122,7 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
 
     private fun initAudio() {
         audioRecorder = AudioRecorder(
+            context = applicationContext,
             onSpeechDetected = {
                 runOnUiThread {
                     if (binding.capsuleStatus.text == "Listening") {
@@ -254,13 +255,15 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
         binding.capsuleSub.text = "Starting session"
         binding.orbView.setState(GlowingOrbView.State.WORKING)
 
-        // Ensure media volume is not muted so user can hear the AI speak
+        // Set communication audio mode & speakerphone for Samsung hardware AEC and clear recording
         try {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
-            val currentVol = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) ?: 0
-            if (currentVol == 0) {
-                val maxVol = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC) ?: 15
-                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, (maxVol * 0.75).toInt(), 0)
+            audioManager?.mode = android.media.AudioManager.MODE_IN_COMMUNICATION
+            audioManager?.isSpeakerphoneOn = true
+            val maxVol = audioManager?.getStreamMaxVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 15
+            val currentVol = audioManager?.getStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL) ?: 0
+            if (currentVol < (maxVol * 0.5).toInt()) {
+                audioManager?.setStreamVolume(android.media.AudioManager.STREAM_VOICE_CALL, (maxVol * 0.85).toInt(), 0)
             }
         } catch (ignored: Exception) {}
 
@@ -272,6 +275,11 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
     private fun endLiveSession() {
         if (isSessionEnding) return
         isSessionEnding = true
+
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager
+            audioManager?.mode = android.media.AudioManager.MODE_NORMAL
+        } catch (ignored: Exception) {}
 
         try {
             geminiClient?.disconnect()

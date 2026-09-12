@@ -96,23 +96,8 @@ class GeminiLiveClient(
                 }
 
                 ws.send(setupPayload.toString())
-                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel, waiting for setupComplete...")
-
-                // Fallback: If setupComplete is omitted by server, start session after 800ms
-                mainHandler.postDelayed({
-                    if (webSocket != null && setupReady.compareAndSet(false, true)) {
-                        android.util.Log.d("GeminiLiveClient", "Fallback: Starting session after setup delay")
-                        listener.onConnected()
-                    }
-                }, 800)
-
-                // Set a 15-second timeout — if connection never becomes ready, disconnect with error
-                mainHandler.postDelayed({
-                    if (!setupReady.get() && webSocket != null) {
-                        android.util.Log.e("GeminiLiveClient", "Setup timeout — no setupComplete received in 15s")
-                        cleanUp("Setup timeout: server did not confirm session. Check API key and model.")
-                    }
-                }, 15000)
+                android.util.Log.d("GeminiLiveClient", "Sent setup for model: $formattedModel, starting live capture immediately")
+                mainHandler.post { listener.onConnected() }
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
@@ -251,7 +236,7 @@ class GeminiLiveClient(
     }
 
     fun sendAudioPcm16k(base64: String) {
-        if (!setupReady.get()) return
+        val ws = webSocket ?: return
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("audio", JSONObject().apply {
@@ -260,11 +245,11 @@ class GeminiLiveClient(
                 })
             })
         }
-        webSocket?.send(payload.toString())
+        ws.send(payload.toString())
     }
 
     fun sendVisualFrame(base64Jpeg: String) {
-        if (!setupReady.get()) return
+        val ws = webSocket ?: return
         val payload = JSONObject().apply {
             put("realtimeInput", JSONObject().apply {
                 put("video", JSONObject().apply {
@@ -273,7 +258,7 @@ class GeminiLiveClient(
                 })
             })
         }
-        webSocket?.send(payload.toString())
+        ws.send(payload.toString())
     }
 
     fun disconnect() {

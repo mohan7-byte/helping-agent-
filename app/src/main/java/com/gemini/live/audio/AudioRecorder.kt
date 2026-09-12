@@ -1,18 +1,24 @@
 package com.gemini.live.audio
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import android.util.Base64
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * High-performance, bulletproof native AudioRecorder for Android & Samsung devices.
- * Supports hardware native sample rates (16kHz, 48kHz, 44.1kHz) with real-time downsampling.
- * Features speech amplitude detection, source fallbacks, and zero WebView overhead.
+ * Detects hardware native sample rate (48kHz on Samsung) with real-time 3:1 downsampling to 16kHz.
+ * Requests exclusive audio focus, uses blocking reads, and features live speech amplitude detection.
  */
 class AudioRecorder(
+    private val context: Context,
     private val onSpeechDetected: (() -> Unit)? = null,
     private val onAudioChunk: (String) -> Unit,
     private val onError: ((String) -> Unit)? = null
@@ -24,17 +30,42 @@ class AudioRecorder(
     var echoGuardActive: Boolean = false
 
     private var activeSampleRate: Int = 16000
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     @SuppressLint("MissingPermission")
     fun start() {
         if (isRecording.get()) return
 
-        // Priority sample rates: 16000 first (zero CPU downsampling), then 48000 (native Samsung HAL 3:1), then 44100
-        val sampleRatesToTry = intArrayOf(16000, 48000, 44100)
+        val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        val nativeRateStr = audioManager?.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)
+        val nativeRate = nativeRateStr?.toIntOrNull() ?: 48000
+
+        // Request Audio Focus to ensure Samsung Knox/One UI unmutes microphone
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val focusReq = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAcceptsDelayedFocusGain(true)
+                    .build()
+                audioFocusRequest = focusReq
+                audioManager?.requestAudioFocus(focusReq)
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+            }
+        } catch (ignored: Exception) {}
+
+        // Prioritize hardware native rate (48kHz on Samsung) first so HAL does not return zeros!
+        val sampleRatesToTry = intArrayOf(nativeRate, 48000, 44100, 16000).distinct().toIntArray()
         val sourcesToTry = intArrayOf(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-            MediaRecorder.AudioSource.MIC,
             MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.MIC,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
             MediaRecorder.AudioSource.DEFAULT
         )
 
@@ -213,6 +244,16 @@ class AudioRecorder(
         val recordToRelease = audioRecord
         recordingThread = null
         audioRecord = null
+
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.abandonAudioFocus(null)
+            }
+        } catch (ignored: Exception) {}
 
         Thread({
             try {
