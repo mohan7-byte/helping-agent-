@@ -76,7 +76,6 @@ class GeminiLiveClient(
                 val setupPayload = JSONObject().apply {
                     put("setup", JSONObject().apply {
                         put("model", formattedModel)
-                        put("responseModalities", JSONArray().apply { put("AUDIO") })
                         put("generationConfig", JSONObject().apply {
                             put("responseModalities", JSONArray().apply { put("AUDIO") })
                             put("speechConfig", JSONObject().apply {
