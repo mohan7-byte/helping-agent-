@@ -232,21 +232,30 @@ class MainActivity : AppCompatActivity(), GeminiLiveClient.Listener {
         geminiClient?.connect(apiKey, model, voice, prompt)
     }
 
+    private var isSessionEnding = false
+
     private fun endLiveSession() {
-        geminiClient?.disconnect()
-        audioRecorder?.stop()
-        audioPlayer?.stop()
-        stopCameraVision()
-        resetInactivityTimer()
+        if (isSessionEnding) return
+        isSessionEnding = true
 
-        binding.connectBtn.visibility = View.VISIBLE
-        binding.liveControls.visibility = View.GONE
-        binding.orbView.setState(GlowingOrbView.State.IDLE)
-        binding.capsuleStatus.text = "Voice"
-        binding.capsuleSub.text = "Ready"
+        try {
+            geminiClient?.disconnect()
+            audioRecorder?.stop()
+            audioPlayer?.stop()
+            stopCameraVision()
+            resetInactivityTimer()
 
-        // Minimize after disconnect
-        moveTaskToBack(true)
+            binding.connectBtn.visibility = View.VISIBLE
+            binding.liveControls.visibility = View.GONE
+            binding.orbView.setState(GlowingOrbView.State.IDLE)
+            binding.capsuleStatus.text = "Voice"
+            binding.capsuleSub.text = "Ready"
+
+            // Minimize after disconnect
+            moveTaskToBack(true)
+        } finally {
+            isSessionEnding = false
+        }
     }
 
     // CameraX 320x240 Live Vision

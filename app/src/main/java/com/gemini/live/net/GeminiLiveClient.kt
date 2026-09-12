@@ -102,6 +102,9 @@ class GeminiLiveClient(
             }
 
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+                val errorMsg = t.localizedMessage ?: "Connection failed"
+                android.util.Log.e("GeminiLiveClient", "WebSocket failure: $errorMsg", t)
+                listener.onStatusChanged("idle", "Connection Error", errorMsg.take(30))
                 cleanUp()
             }
         })

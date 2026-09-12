@@ -85,13 +85,19 @@ class AudioRecorder(
     }
 
     fun stop() {
-        isRecording.set(false)
-        try {
-            recordingThread?.interrupt()
-            recordingThread = null
-            audioRecord?.stop()
-            audioRecord?.release()
-            audioRecord = null
-        } catch (ignored: Exception) {}
+        if (!isRecording.compareAndSet(true, false)) return
+        val threadToStop = recordingThread
+        val recordToRelease = audioRecord
+        recordingThread = null
+        audioRecord = null
+
+        // Offload blocking AudioRecord stop and release to background thread
+        Thread({
+            try {
+                threadToStop?.interrupt()
+                recordToRelease?.stop()
+                recordToRelease?.release()
+            } catch (ignored: Exception) {}
+        }, "Voice-AudioRecorder-Teardown").start()
     }
 }

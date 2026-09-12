@@ -36,7 +36,7 @@ class AudioPlayer(
         val bufferSize = Math.max(minBufferSize * 2, 4096)
 
         val audioAttributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
 
@@ -58,7 +58,11 @@ class AudioPlayer(
     fun start() {
         if (isPlaying.get()) return
         isPlaying.set(true)
-        audioTrack?.play()
+        try {
+            audioTrack?.play()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         playbackThread = Thread({
             var activePlaying = false
@@ -79,6 +83,8 @@ class AudioPlayer(
                     }
                 } catch (e: InterruptedException) {
                     break
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
             if (activePlaying) onPlaybackFinished()
@@ -108,14 +114,24 @@ class AudioPlayer(
     }
 
     fun stop() {
-        isPlaying.set(false)
+        if (!isPlaying.compareAndSet(true, false)) {
+            // Already stopped or stopping
+            audioQueue.clear()
+            return
+        }
         audioQueue.clear()
-        try {
-            playbackThread?.interrupt()
-            playbackThread = null
-            audioTrack?.stop()
-            audioTrack?.release()
-            audioTrack = null
-        } catch (ignored: Exception) {}
+        val threadToStop = playbackThread
+        val trackToRelease = audioTrack
+        playbackThread = null
+        audioTrack = null
+
+        // Offload blocking audio driver stop/release to background thread to NEVER freeze UI
+        Thread({
+            try {
+                threadToStop?.interrupt()
+                trackToRelease?.stop()
+                trackToRelease?.release()
+            } catch (ignored: Exception) {}
+        }, "Voice-AudioPlayer-Teardown").start()
     }
 }

@@ -197,11 +197,11 @@ object GeminiToolsSchema {
         // wait_seconds
         declarations.put(JSONObject().apply {
             put("name", "wait_seconds")
-            put("description", "Pause execution for specified seconds (0.5 - 4.0s) to allow screens or apps to load.")
+            put("description", "Pause execution for 1 to 4 seconds for screen or app to load.")
             put("parameters", JSONObject().apply {
                 put("type", "OBJECT")
                 put("properties", JSONObject().apply {
-                    put("seconds", JSONObject().apply { put("type", "NUMBER") })
+                    put("seconds", JSONObject().apply { put("type", "NUMBER"); put("description", "Duration in seconds (e.g. 1.5)") })
                 })
                 put("required", JSONArray().apply { put("seconds") })
             })
